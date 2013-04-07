@@ -32,6 +32,7 @@ public class SettingsActivity extends SherlockPreferenceActivity implements
 	public static final String KEY_SYNC_SOURCE = "syncSource";
 	
 	private String KEY_AUTO_SYNC_INTERVAL;
+	private String KEY_SYNC_TIMEOUT;
 	private String KEY_VIEW_RECURSION_MAX;
 	private String KEY_DEFAULT_TODO;
 	private String KEY_CALENDAR_NAME;
@@ -67,6 +68,7 @@ public class SettingsActivity extends SherlockPreferenceActivity implements
 		this.KEY_CALENDAR_REMINDER_INTERVAL = getString(R.string.key_calendarReminderInterval);
 		this.KEY_THEME = getString(R.string.key_theme);
 		this.KEY_FONT_SIZE = getString(R.string.key_fontSize);
+		this.KEY_SYNC_TIMEOUT = getString(R.string.key_syncTimeout);
 		
 		initSettings();
 	}
@@ -80,6 +82,7 @@ public class SettingsActivity extends SherlockPreferenceActivity implements
 		updatePreferenceSummary(KEY_CALENDAR_REMINDER_INTERVAL);
 		updatePreferenceSummary(KEY_THEME);
 		updatePreferenceSummary(KEY_FONT_SIZE);
+		updatePreferenceSummary(KEY_SYNC_TIMEOUT);
 	}
 
 
@@ -135,6 +138,8 @@ public class SettingsActivity extends SherlockPreferenceActivity implements
 			summary = appSettings.getString(key, "");
 		} else if (key.equals(KEY_FONT_SIZE)) {
 			summary = appSettings.getString(key, "");			
+		} else if (key.equals(KEY_SYNC_TIMEOUT)) {
+			summary = appSettings.getString(key, "");
 		}
 
 		if (TextUtils.isEmpty(summary) == false)

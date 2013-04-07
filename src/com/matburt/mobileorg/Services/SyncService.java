@@ -10,7 +10,9 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.IBinder;
 import android.preference.PreferenceManager;
+import android.util.Log;
 
+import com.matburt.mobileorg.R;
 import com.matburt.mobileorg.Gui.SynchronizerNotification;
 import com.matburt.mobileorg.Gui.SynchronizerNotificationCompat;
 import com.matburt.mobileorg.OrgData.MobileOrgApplication;
@@ -30,15 +32,18 @@ public class SyncService extends Service implements
 	private static final String ACTION = "action";
 	private static final String START_ALARM = "START_ALARM";
 	private static final String STOP_ALARM = "STOP_ALARM";
+	private static final String STOP_SYNC = "STOP_SYNC";
 
 	private SharedPreferences appSettings;
 	private MobileOrgApplication appInst;
 
 	private AlarmManager alarmManager;
-	private PendingIntent alarmIntent;
-	private boolean alarmScheduled = false;
+	private PendingIntent autoSyncIntent;
+	private PendingIntent syncStopIntent;
+	private boolean autoSyncAlarmScheduled = false;
 
 	private boolean syncRunning;
+	private Thread syncThread;
 
 	@Override
 	public void onCreate() {
@@ -52,18 +57,18 @@ public class SyncService extends Service implements
 
 	@Override
 	public void onDestroy() {
-		unsetAlarm();
+		unsetAutoSyncAlarm();
 		this.appSettings.unregisterOnSharedPreferenceChangeListener(this);
 		super.onDestroy();
 	}
 	
-	public static void stopAlarm(Context context) {
+	public static void stopAutoSyncAlarm(Context context) {
 		Intent intent = new Intent(context, SyncService.class);
 		intent.putExtra(ACTION, SyncService.STOP_ALARM);
 		context.startService(intent);
 	}
 
-	public static void startAlarm(Context context) {
+	public static void startAutoSyncAlarm(Context context) {
 		Intent intent = new Intent(context, SyncService.class);
 		intent.putExtra(ACTION, SyncService.START_ALARM);
 		context.startService(intent);
@@ -73,9 +78,11 @@ public class SyncService extends Service implements
 	public int onStartCommand(Intent intent, int flags, int startId) {
 		String action = intent.getStringExtra(ACTION);
 		if (action != null && action.equals(START_ALARM))
-			setAlarm();
+			setAutoSyncAlarm();
 		else if (action != null && action.equals(STOP_ALARM))
-			unsetAlarm();
+			unsetAutoSyncAlarm();
+		else if (action != null && action.equals(STOP_SYNC))
+			stopSynchronizer();
 		else if(!this.syncRunning) {
 			this.syncRunning = true;
 			runSynchronizer();
@@ -106,7 +113,7 @@ public class SyncService extends Service implements
 			synchronizer = null;
 		
 		SynchronizerNotificationCompat notification;
-		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.HONEYCOMB)
+		if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.ICE_CREAM_SANDWICH)
 			notification = new SynchronizerNotification(this);
 		else
 			notification = new SynchronizerNotificationCompat(this);
@@ -115,15 +122,16 @@ public class SyncService extends Service implements
     }
 
 	private void runSynchronizer() {
-		unsetAlarm();
+		unsetAutoSyncAlarm();
 		final Synchronizer synchronizer = this.getSynchronizer();
 		final OrgDatabase db = new OrgDatabase(this);
 		final OrgFileParser parser = new OrgFileParser(db, getContentResolver());
 		final boolean calendarEnabled = appSettings.getBoolean("calendarEnabled", false);
 
-		Thread syncThread = new Thread() {
+		this.syncThread = new Thread() {
 			public void run() {
-				ArrayList<String> changedFiles = synchronizer.runSynchronizer(parser);				
+				Log.d("MobileOrg", "Thread - run()");
+				ArrayList<String> changedFiles = synchronizer.runSynchronizer(parser);		
 				String[] files = changedFiles.toArray(new String[changedFiles.size()]);
 				
 				if(calendarEnabled) {
@@ -135,42 +143,77 @@ public class SyncService extends Service implements
 				synchronizer.close();
 				db.close();
 				syncRunning = false;
-				setAlarm();
+				cancelSyncTimeout();
+				setAutoSyncAlarm();
+				Log.d("MobileOrg", "Thread - run() finished");
 			}
 		};
 
+		setSyncTimeout();
 		syncThread.start();
 	}
 
+	private void stopSynchronizer() {
+		Log.d("MobileOrg", "Stop synchronizer()");
+		cancelSyncTimeout();
+		
+		if (this.syncThread == null)
+			return;
 
-	private void setAlarm() {
+		Log.d("MobileOrg", "Try killing thread");
+		this.syncThread.interrupt();
+		this.syncThread = null;
+		Log.d("MobileOrg", "Killed thread!");
+	}
+	
+	private void setSyncTimeout() {
+		int timeoutInSeconds = Integer.parseInt(
+				this.appSettings.getString(getString(R.string.key_syncTimeout), "60"), 10);
+		int timeoutInMillis = timeoutInSeconds * 1000;
+		
+		Intent intent = new Intent(this, SyncService.class);
+		intent.putExtra(ACTION, STOP_SYNC);
+		this.syncStopIntent = PendingIntent.getService(appInst, 0, intent, PendingIntent.FLAG_CANCEL_CURRENT);
+		alarmManager.set(AlarmManager.RTC, System.currentTimeMillis()
+				+ timeoutInMillis, this.syncStopIntent);
+	}
+	
+	private void cancelSyncTimeout() {
+		if (this.syncStopIntent == null)
+			return;
+		
+		alarmManager.cancel(syncStopIntent);
+		this.syncStopIntent = null;
+	}
+
+	private void setAutoSyncAlarm() {
 		boolean doAutoSync = this.appSettings.getBoolean("doAutoSync", false);
-		if (!this.alarmScheduled && doAutoSync) {
+		if (!this.autoSyncAlarmScheduled && doAutoSync) {
 
 			int interval = Integer.parseInt(
 					this.appSettings.getString("autoSyncInterval", "1800000"),
 					10);
 
-			this.alarmIntent = PendingIntent.getService(appInst, 0, new Intent(
+			this.autoSyncIntent = PendingIntent.getService(appInst, 0, new Intent(
 					this, SyncService.class), 0);
 			alarmManager.setRepeating(AlarmManager.RTC,
 					System.currentTimeMillis() + interval, interval,
-					alarmIntent);
+					autoSyncIntent);
 
-			this.alarmScheduled = true;
+			this.autoSyncAlarmScheduled = true;
 		}
 	}
 
-	private void unsetAlarm() {
-		if (this.alarmScheduled) {
-			this.alarmManager.cancel(this.alarmIntent);
-			this.alarmScheduled = false;
+	private void unsetAutoSyncAlarm() {
+		if (this.autoSyncAlarmScheduled) {
+			this.alarmManager.cancel(this.autoSyncIntent);
+			this.autoSyncAlarmScheduled = false;
 		}
 	}
 
-	private void resetAlarm() {
-		unsetAlarm();
-		setAlarm();
+	private void resetAutoSyncAlarm() {
+		unsetAutoSyncAlarm();
+		setAutoSyncAlarm();
 	}
 
 
@@ -179,13 +222,13 @@ public class SyncService extends Service implements
 			String key) {
 		if (key.equals("doAutoSync")) {
 			if (sharedPreferences.getBoolean("doAutoSync", false)
-					&& !this.alarmScheduled)
-				setAlarm();
+					&& !this.autoSyncAlarmScheduled)
+				setAutoSyncAlarm();
 			else if (!sharedPreferences.getBoolean("doAutoSync", false)
-					&& this.alarmScheduled)
-				unsetAlarm();
+					&& this.autoSyncAlarmScheduled)
+				unsetAutoSyncAlarm();
 		} else if (key.equals("autoSyncInterval"))
-			resetAlarm();
+			resetAutoSyncAlarm();
 	}
 	
 	@Override

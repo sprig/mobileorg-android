@@ -8,6 +8,6 @@ public class MobileOrgApplication extends Application {
     
     @Override
     public void onCreate() {
-		SyncService.startAlarm(getApplicationContext());
+		SyncService.startAutoSyncAlarm(getApplicationContext());
     }
 }

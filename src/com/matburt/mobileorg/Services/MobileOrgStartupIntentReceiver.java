@@ -19,7 +19,7 @@ public class MobileOrgStartupIntentReceiver extends BroadcastReceiver {
 	@Override
 	public void onReceive(Context context, Intent intent) {
 		if (this.shouldStartService(context)) {
-			SyncService.startAlarm(context);
+			SyncService.startAutoSyncAlarm(context);
 		}
 		
 		Intent calIntent = new Intent(context, CalendarSyncService.class);

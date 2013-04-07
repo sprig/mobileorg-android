@@ -27,7 +27,7 @@ public class EditActivity extends SherlockFragmentActivity implements EditHost,
 		setContentView(R.layout.edit);
 		getSupportActionBar().setTitle(R.string.menu_capture);
 				
-		SyncService.stopAlarm(this); // Don't run background sync while editing node
+		SyncService.stopAutoSyncAlarm(this); // Don't run background sync while editing node
 		
 		controller = EditActivityController.getController(getIntent(),
 				getContentResolver(), OrgUtils.getDefaultTodo(this));
@@ -41,7 +41,7 @@ public class EditActivity extends SherlockFragmentActivity implements EditHost,
 	@Override
 	protected void onDestroy() {
 		super.onDestroy();
-		SyncService.startAlarm(this);
+		SyncService.startAutoSyncAlarm(this);
 	}
 	
 	

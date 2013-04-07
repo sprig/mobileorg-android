@@ -201,7 +201,9 @@
     <string name="preference_view_apply_formatting">Apply view formatting</string>
     <string name="preference_sync_wifi_only">Sync with Wifi only</string>
     <string name="preference_sync_wifi_only_summary">Only try to synchronize when Wireless is up</string>
-    
+    <string name="preference_sync_timeout">Sync timeout</string>
+    <string name="preference_sync_timeout_summary">Timeout for synchronization</string>
+
     <!-- preference keys -->
     <string name="key_autoSyncInterval">autoSyncInterval</string>
     <string name="key_viewRecursionMax">viewRecursionMax</string>
@@ -213,6 +215,7 @@
     <string name="key_fontSize">fontSize</string>
     <string name="key_syncSource">syncSource</string>
     <string name="key_syncWifiOnly">syncWifiOnly</string>
+    <string name="key_syncTimeout">syncTimeout</string>
 
     <!-- preference synchronizers (obsolete?) -->
     <string name="edit_date_start">Start</string>
